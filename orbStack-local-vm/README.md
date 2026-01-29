@@ -85,29 +85,17 @@ orb -m server-vm-0 "nomad server members"
 - ✅ Systemd service for auto-start
 - ✅ Required dependencies (wget, unzip, curl)
 
+## 🖥️ OrbStack Dashboard
 
-## 🐛 Troubleshooting
+![OrbStack Dashboard](orbStack_dashboard.png)
 
-### Check if cloud-init ran successfully:
-```bash
-orb -m client-vm-0 "cloud-init status"
-```
+You can access all your local VMs through the **OrbStack UI**. The dashboard allows you to:
+- View all running VMs at a glance
+- **Directly access the terminal** of any VM from the UI itself
+- **No need to SSH** or manually connect to VMs
+- Monitor resource usage and VM status
 
-### View full cloud-init logs:
-```bash
-orb -m client-vm-0 "sudo cat /var/log/cloud-init-output.log"
-```
-
-### Check if Nomad is running:
-```bash
-orb -m client-vm-0 "sudo systemctl status nomad"
-```
-
-### Manually trigger cloud-init (for testing):
-```bash
-orb -m client-vm-0 "sudo cloud-init clean"
-orb -m client-vm-0 "sudo cloud-init init"
-```
+This makes it easy to manage and interact with your VMs without using command-line tools.
 
 ## 📚 Additional Resources
 
