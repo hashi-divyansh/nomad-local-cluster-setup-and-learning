@@ -2,6 +2,21 @@
 
 This Terraform configuration creates multiple VMs using OrbStack and configures them using **cloud-init**, which runs scripts **inside** the VMs during their first boot.
 
+## 📋 Prerequisites
+
+Before you begin, ensure you have the following installed on your system:
+
+### Install OrbStack
+```bash
+brew install orbstack
+```
+
+### Install Terraform
+```bash
+brew tap hashicorp/tap
+brew install hashicorp/tap/terraform
+```
+
 ## 📁 Files Structure
 
 ```
@@ -22,39 +37,6 @@ Cloud-init is an industry-standard method for VM initialization. When you use cl
 - **Idempotent** - only runs once on first boot
 - **Standard format** - works across different platforms (AWS, Azure, GCP, etc.)
 
-## 📝 Cloud-Init Configuration Sections
-
-### 1. **package_update & packages**
-```yaml
-package_update: true
-packages:
-  - wget
-  - unzip
-  - curl
-```
-- Updates package lists and installs required packages
-
-### 2. **write_files**
-```yaml
-write_files:
-  - path: /etc/nomad.d/client.hcl
-    permissions: '0644'
-    content: |
-      # Your configuration here
-```
-- Creates configuration files before running commands
-- Perfect for systemd services and application configs
-
-### 3. **runcmd**
-```yaml
-runcmd:
-  - mkdir -p /opt/nomad/data
-  - wget https://releases.hashicorp.com/nomad/1.7.3/nomad_1.7.3_linux_arm64.zip
-  - systemctl start nomad
-```
-- Runs commands in sequence
-- Downloads and installs Nomad
-- Starts services
 
 ## 🔧 How to Use
 
@@ -103,42 +85,6 @@ orb -m server-vm-0 "nomad server members"
 - ✅ Systemd service for auto-start
 - ✅ Required dependencies (wget, unzip, curl)
 
-## 🎯 Customizing Cloud-Init
-
-### To install a different tool (e.g., Consul):
-
-Edit `cloud-init-client.yaml` or `cloud-init-server.yaml`:
-
-```yaml
-runcmd:
-  # Add your custom commands
-  - cd /tmp
-  - wget https://releases.hashicorp.com/consul/1.17.0/consul_1.17.0_linux_arm64.zip
-  - unzip consul_1.17.0_linux_arm64.zip
-  - mv consul /usr/local/bin/
-  - chmod +x /usr/local/bin/consul
-  # ... additional setup
-```
-
-### To change the Nomad version:
-
-Update the version in the `runcmd` section:
-
-```yaml
-runcmd:
-  - wget -q https://releases.hashicorp.com/nomad/1.8.0/nomad_1.8.0_linux_arm64.zip
-```
-
-## 🆚 Comparison: Cloud-Init vs Local-Exec
-
-| Feature | Cloud-Init (Current) | Local-Exec (Previous) |
-|---------|---------------------|----------------------|
-| **Runs** | Inside VM | From host machine |
-| **Requires** | Cloud-init support | SSH/orb access |
-| **Speed** | Parallel execution | Sequential |
-| **Standard** | Industry standard | Terraform-specific |
-| **Portable** | Works anywhere | Platform-dependent |
-| **Idempotent** | Yes (first boot only) | Depends on script |
 
 ## 🐛 Troubleshooting
 

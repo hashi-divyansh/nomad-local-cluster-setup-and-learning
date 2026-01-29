@@ -1,6 +1,6 @@
 # Nomad Architecture Explanation
 
-## 🏗️ Your Cluster Setup
+## 🏗️ Cluster Setup
 
 ### VMs Created by Terraform:
 
@@ -72,94 +72,31 @@ server {
 - ✅ Execute workloads
 - ❌ Do NOT make scheduling decisions
 
-## 🔍 How to Verify the Names
+## 🛠️ Important Commands
 
-### 1. List all VMs:
+> **Note:** These commands should be executed from one of the Nomad servers (e.g., `server-vm-0`, `server-vm-1`, or `server-vm-2`)
+
+### Check Job Status
 ```bash
-orb list
+nomad job status
 ```
-**Expected output:**
-```
-client-vm-0
-client-vm-1
-client-vm-2
-server-vm-0
-server-vm-1
-server-vm-2
-```
+**Use case:** Lists all running jobs in the cluster
 
-### 2. Check server cluster:
+### Check Detailed Job Status
 ```bash
-orb -m server-vm-0 "nomad server members"
+nomad job status -verbose example
 ```
-**Shows:**
-- server-vm-0 (Leader: true/false)
-- server-vm-1 (Leader: true/false)
-- server-vm-2 (Leader: true/false)
+**Use case:** Shows detailed information about a specific job named "example", including allocations, task groups, and deployment status
 
-### 3. Check connected clients:
+### Check Server Members
 ```bash
-orb -m server-vm-0 "nomad node status"
+nomad server members
 ```
-**Shows:**
-- client-vm-0 (Status: ready)
-- client-vm-1 (Status: ready)
-- client-vm-2 (Status: ready)
+**Use case:** Lists all Nomad servers in the cluster and shows which one is the leader
 
-### 4. From a client, check which servers it's connected to:
+### Check Client Node Status
 ```bash
-orb -m client-vm-0 "cat /etc/nomad.d/client.hcl"
+nomad node status
 ```
-**Shows:**
-```hcl
-servers = ["server-vm-0:4647", "server-vm-1:4647", "server-vm-2:4647"]
-```
+**Use case:** Shows the status of all client nodes (workers) in the cluster, including their readiness and resource availability
 
-## 🤔 Common Confusion
-
-**Q: Why don't clients have `client-vm-0` in their config?**
-**A:** Because clients don't connect to other clients. They only connect to servers.
-
-**Q: When do I see `client-vm-0` mentioned?**
-**A:** 
-1. In `terraform output` - VM names
-2. In `orb list` - VM listing
-3. In `nomad node status` - Client node names
-4. In job allocations - Where jobs are running
-
-**Q: Can I connect to a client VM?**
-**A:** Yes! 
-```bash
-orb -m client-vm-0 "nomad version"
-```
-
-## 📊 Real Example
-
-When you run a Nomad job:
-
-```bash
-# Submit job to server
-orb -m server-vm-0 "nomad job run my-job.nomad"
-
-# Server decides which CLIENT to run it on
-# Let's say it picks client-vm-1
-
-# Check where it's running
-orb -m server-vm-0 "nomad job status my-job"
-# Output shows: Running on client-vm-1
-```
-
-## ✅ Summary
-
-Your configuration is **CORRECT**:
-- ✅ Clients list **servers** in their config (correct!)
-- ✅ Servers list **other servers** in their config (correct!)
-- ✅ VM names: `client-vm-{0,1,2}` and `server-vm-{0,1,2}` (correct!)
-
-The names `client-vm-0`, `client-vm-1`, `client-vm-2` are used:
-1. As VM hostnames (set by Terraform)
-2. In Nomad's node list (automatically registered)
-3. When viewing job allocations
-4. When connecting via `orb -m client-vm-0`
-
-But they are **NOT** in the client config file because clients don't connect to other clients!
