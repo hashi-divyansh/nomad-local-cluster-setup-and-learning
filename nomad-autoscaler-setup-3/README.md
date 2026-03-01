@@ -1,6 +1,6 @@
 # Nomad Autoscaler Setup with OrbStack
 
-Complete infrastructure setup for learning HashiCorp Nomad Autoscaler using OrbStack VMs, Terraform, and cloud-init.
+Complete infrastructure setup for learning HashiCorp Nomad Autoscaler using OrbStack VMs, Terraform, minimal cloud-init bootstrap, and Ansible.
 
 ## Architecture
 
@@ -11,7 +11,7 @@ Complete infrastructure setup for learning HashiCorp Nomad Autoscaler using OrbS
 
 **Technology Stack:**
 - **OS**: Debian Bookworm (ARM64)
-- **Provisioning**: Terraform + cloud-init
+- **Provisioning**: Terraform + minimal cloud-init + Ansible
 - **Orchestration**: Nomad 1.7.3
 - **Monitoring**: Prometheus 2.50.1
 - **Container Runtime**: Docker (on client nodes)
@@ -20,21 +20,56 @@ Complete infrastructure setup for learning HashiCorp Nomad Autoscaler using OrbS
 
 - macOS with OrbStack installed
 - Terraform >= 1.0
+- Python 3 on macOS host
+- Ansible installed on macOS host
+- SSH key pair available on host (default: `~/.ssh/id_ed25519`)
 - Access to HashiCorp releases and GitHub
 
 ## Setup
 
-### 1. Deploy Infrastructure
+### 1. Deploy Infrastructure with Terraform
 
 ```bash
-cd nomad-autoscaler-setup
+cd nomad-autoscaler-setup-3
 terraform init
 terraform apply -auto-approve
 ```
 
-**Provisioning time:** ~3-5 minutes
+If your public key is not `~/.ssh/id_ed25519.pub`:
 
-### 2. Verify Cluster Health
+```bash
+terraform apply -auto-approve -var="ssh_public_key_path=~/.ssh/id_rsa.pub"
+```
+
+### 2. Generate Ansible Inventory
+
+```bash
+cd ansible
+python3 inventory/generate_inventory.py
+```
+
+If needed, override SSH settings:
+
+```bash
+ANSIBLE_USER=root ANSIBLE_PRIVATE_KEY_FILE=~/.ssh/id_ed25519 python3 inventory/generate_inventory.py
+```
+
+### 3. Configure VMs with Ansible
+
+```bash
+cd ansible
+ansible-playbook playbooks/site.yml
+```
+
+Optional one-command flow from repo root:
+
+```bash
+make provision
+```
+
+**Provisioning time:** ~5-8 minutes total (Terraform + Ansible)
+
+### 4. Verify Cluster Health
 
 Check Nomad servers formed quorum:
 ```bash
@@ -54,7 +89,7 @@ Check client nodes registered:
 orb -m server-vm-0 nomad node status
 ```
 
-### 3. Access UIs
+### 5. Access UIs
 
 **Nomad UI:**
 - URL: http://localhost:4646/ui/jobs
@@ -68,10 +103,10 @@ orb -m server-vm-0 nomad node status
 
 ## DNS Configuration
 
-OrbStack VMs use read-only `/etc/resolv.conf` symlinks. Cloud-init handles this by:
-1. Deleting the symlink during `runcmd` phase
+OrbStack VMs use read-only `/etc/resolv.conf` symlinks. Ansible handles this by:
+1. Deleting the symlink during role execution
 2. Writing new resolv.conf with public DNS (1.1.1.1, 8.8.8.8)
-3. Ensures `wget` downloads work during provisioning
+3. Ensuring release downloads work during provisioning
 
 ## Nomad Configuration
 
@@ -93,11 +128,99 @@ Configured to scrape:
 - **Nomad Clients**: `client-vm-{0,1,2}.orb.local:4646/v1/metrics`
 - **Prometheus**: `localhost:9090`
 
+## Deployed Webapp
+
+The webapp autoscaling job is now deployed and running. Access it via the dynamic port assigned by Nomad:
+
+### Running Status
+
+![Webapp Running Port](./webapp-running-port.png)
+
+The webapp is currently accessible at **192.168.139.135:28915** with the following specs:
+- **Image**: nginx:alpine
+- **Initial Allocations**: 2
+- **CPU per allocation**: 100 MHz
+- **Memory per allocation**: 128 MB
+- **Min instances**: 2
+- **Max instances**: 10
+- **Scaling target**: 70% CPU usage
+
+### Verification
+
+![Curl Webapp Response](./curl-to-webapp.png)
+
+```bash
+# Get current deployment port from allocation
+nomad job allocs webapp
+
+# Test accessibility
+curl 192.168.139.135:28915
+```
+
+Expected response: Default nginx welcome page
+
+### Scaling Configuration
+
+The webapp job is configured with:
+- **Cooldown**: 30 seconds between scaling actions
+- **Evaluation Interval**: 10 seconds
+- **Metrics Source**: Prometheus
+- **Query**: `avg(nomad_client_allocs_cpu_total_percent{task='web'})`
+- **Strategy**: Target-value at 70% CPU threshold
+
+When CPU usage exceeds 70%, Nomad Autoscaler will automatically scale to a maximum of 10 instances. When demand drops, it scales back down to the minimum of 2 instances.
+
 ## Next Steps: Nomad Autoscaler
 
-### 1. Deploy Sample Application
+### 1. Generate Load & Test Autoscaling
 
-Create a job with scaling policy (recommended starting point):
+Install the load testing tool and generate traffic:
+
+```bash
+# Install hey load tester
+brew install hey
+
+# Generate load for 5 minutes with 100 concurrent connections
+hey -z 5m -c 100 -q 50 http://192.168.139.135:28915
+```
+
+### 2. Monitor Scaling in Real-time
+
+**Watch instance count increase:**
+```bash
+# Watch webapp allocations
+nomad job status webapp
+
+# Or use the Nomad UI
+# http://localhost:4646/ui/jobs/webapp@default
+```
+
+**Check autoscaler logs:**
+```bash
+# Get running autoscaler allocation ID
+ALLOC_ID=$(nomad job allocs autoscaler | grep running | head -1 | awk '{print $1}')
+
+# Follow logs
+nomad alloc logs -f $ALLOC_ID
+```
+
+**Monitor CPU metrics in Prometheus:**
+1. Open http://localhost:9090/graph
+2. Query: `nomad_client_allocs_cpu_total_percent{task='web'}`
+3. Watch CPU climb above 70% threshold
+
+### 3. Scale-Down Testing
+
+Once load generation stops, observe:
+- Cooldown period (30s) before scale-down evaluation
+- Gradual reduction back to 2 minimum instances
+- Total time from peak to baseline
+
+## Autoscaler Configuration Examples
+
+The examples below show how to configure Nomad Autoscaler for different scenarios:
+
+### Basic Scaling Policy
 
 ```hcl
 job "webapp" {
@@ -142,9 +265,9 @@ job "webapp" {
 }
 ```
 
-### 2. Deploy Nomad Autoscaler
+### Autoscaler Job Configuration
 
-Run autoscaler as a Nomad job (recommended):
+Reference configuration for running Nomad Autoscaler as a job:
 
 ```hcl
 job "autoscaler" {
@@ -191,28 +314,36 @@ EOH
 }
 ```
 
-### 3. Generate Load & Observe Scaling
-
+## Load Testing 
 ```bash
-# Install load testing tool
+# Install hey if you don't have it
 brew install hey
 
-# Generate load
-hey -z 5m -c 50 http://server-vm-0.orb.local:8080
-
-# Watch autoscaler decisions
-nomad job status webapp
+# Generate load for 5 minutes
+hey -z 5m -c 100 -q 50 http://192.168.139.135:24850
 ```
 
 ## Troubleshooting
 
-### VMs not provisioning correctly
+### Terraform creates VMs but services are missing
 ```bash
-# Check cloud-init logs
-orb -m server-vm-0 tail -100 /var/log/cloud-init-output.log
+# Re-generate inventory from latest Terraform outputs
+cd ansible
+python3 inventory/generate_inventory.py
 
-# Check DNS is working
+# Run Ansible again
+make ansible
+
+# Validate SSH access from host
+ANSIBLE_CONFIG=ansible/ansible.cfg ANSIBLE_ROLES_PATH=ansible/roles ansible -i ansible/inventory/hosts.yml all -m ping
+```
+
+### DNS issues inside VMs
+```bash
+# Check DNS is configured by Ansible
 orb -m server-vm-0 cat /etc/resolv.conf
+
+# Verify external connectivity
 orb -m server-vm-0 ping -c 1 releases.hashicorp.com
 ```
 
@@ -246,11 +377,14 @@ terraform apply -auto-approve
 ## File Structure
 
 ```
-nomad-autoscaler-setup/
+nomad-autoscaler-setup-3/
 ├── main.tf                      # Terraform config
-├── cloud-init-server.yaml       # Server VM provisioning
-├── cloud-init-client.yaml       # Client VM provisioning
-├── cloud-init-prometheus.yaml   # Prometheus VM provisioning
+├── cloud-init-bootstrap.yaml.tmpl # Minimal SSH + Python bootstrap for all VMs
+├── ansible/                     # VM configuration via Ansible
+│   ├── inventory/
+│   ├── playbooks/
+│   ├── roles/
+│   └── group_vars/
 ├── jobs/                        # Nomad job files (create for autoscaler)
 └── README.md                    # This file
 ```

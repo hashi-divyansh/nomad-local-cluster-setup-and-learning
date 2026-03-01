@@ -1,0 +1,26 @@
+data_dir = "/opt/nomad/data"
+
+log_level = "INFO"
+
+server {
+  enabled = true
+  bootstrap_expect = 3
+
+  server_join {
+    retry_join = ["server-vm-0.orb.local:4648", "server-vm-1.orb.local:4648", "server-vm-2.orb.local:4648"]
+    retry_max = 30
+    retry_interval = "5s"
+  }
+}
+
+bind_addr = "0.0.0.0"
+
+advertise {
+  http = "{{ '{{ GetPrivateIP }}' }}"
+  rpc  = "{{ '{{ GetPrivateIP }}' }}"
+  serf = "{{ '{{ GetPrivateIP }}' }}"
+}
+
+ui {
+  enabled = true
+}

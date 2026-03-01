@@ -1,0 +1,97 @@
+---
+- name: Install client dependencies
+  ansible.builtin.apt:
+    name:
+      - wget
+      - unzip
+      - curl
+      - docker.io
+    state: present
+    update_cache: true
+
+- name: Ensure nomad user exists
+  ansible.builtin.user:
+    name: nomad
+    system: true
+    create_home: false
+    shell: /usr/sbin/nologin
+
+- name: Ensure Nomad directories exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+  loop:
+    - /etc/nomad.d
+    - /opt/nomad/data
+
+- name: Replace OrbStack resolv.conf symlink
+  ansible.builtin.file:
+    path: /etc/resolv.conf
+    state: absent
+
+- name: Configure DNS resolvers
+  ansible.builtin.copy:
+    dest: /etc/resolv.conf
+    mode: "0644"
+    content: |
+      nameserver 1.1.1.1
+      nameserver 8.8.8.8
+
+- name: Ensure Docker is enabled and started
+  ansible.builtin.systemd:
+    name: docker
+    enabled: true
+    state: started
+
+- name: Add nomad user to docker group
+  ansible.builtin.user:
+    name: nomad
+    groups: docker
+    append: true
+
+- name: Download Nomad binary archive
+  ansible.builtin.get_url:
+    url: "{{ nomad_zip_url }}"
+    dest: "{{ nomad_zip_tmp_path }}"
+    mode: "0644"
+
+- name: Extract Nomad binary
+  ansible.builtin.unarchive:
+    src: "{{ nomad_zip_tmp_path }}"
+    dest: /usr/local/bin
+    remote_src: true
+    creates: /usr/local/bin/nomad
+
+- name: Ensure Nomad binary is executable
+  ansible.builtin.file:
+    path: /usr/local/bin/nomad
+    mode: "0755"
+
+- name: Deploy Nomad client configuration
+  ansible.builtin.template:
+    src: client.hcl.j2
+    dest: /etc/nomad.d/client.hcl
+    mode: "0644"
+  notify: Restart nomad
+
+- name: Deploy Nomad systemd unit
+  ansible.builtin.template:
+    src: nomad.service.j2
+    dest: /etc/systemd/system/nomad.service
+    mode: "0644"
+  notify:
+    - Reload systemd
+    - Restart nomad
+
+- name: Ensure Nomad service is enabled and started
+  ansible.builtin.systemd:
+    name: nomad
+    daemon_reload: true
+    enabled: true
+    state: started
+
+- name: Remove downloaded Nomad archive
+  ansible.builtin.file:
+    path: "{{ nomad_zip_tmp_path }}"
+    state: absent

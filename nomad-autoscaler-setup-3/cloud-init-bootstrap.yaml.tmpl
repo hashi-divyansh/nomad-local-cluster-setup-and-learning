@@ -1,0 +1,19 @@
+#cloud-config
+
+package_update: true
+package_upgrade: false
+
+packages:
+  - openssh-server
+  - python3
+
+runcmd:
+  - install -d -m 700 /root/.ssh
+  - touch /root/.ssh/authorized_keys
+  - chmod 600 /root/.ssh/authorized_keys
+  - grep -qxF '${ssh_public_key}' /root/.ssh/authorized_keys || echo '${ssh_public_key}' >> /root/.ssh/authorized_keys
+  - if [ -f /etc/ssh/sshd_config ]; then sed -i -E 's/^#?PermitRootLogin.*/PermitRootLogin prohibit-password/' /etc/ssh/sshd_config || true; fi
+  - if [ -f /etc/ssh/sshd_config ]; then sed -i -E 's/^#?PubkeyAuthentication.*/PubkeyAuthentication yes/' /etc/ssh/sshd_config || true; fi
+  - systemctl enable --now ssh || systemctl enable --now sshd
+
+final_message: "Minimal cloud-init bootstrap completed after $UPTIME seconds"
