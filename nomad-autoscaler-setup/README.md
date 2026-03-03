@@ -54,8 +54,6 @@ make destroy
 ---
 
 **Project file structure?**
-
-**Answer**
 ```
 nomad-autoscaler-setup-3/
 ├── main.tf                      # Terraform config
