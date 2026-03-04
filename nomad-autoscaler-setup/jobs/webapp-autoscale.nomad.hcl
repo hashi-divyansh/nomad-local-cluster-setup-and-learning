@@ -17,10 +17,12 @@ job "webapp" {
 
         check "cpu_usage" {
           source = "prometheus"
-          query  = "avg(nomad_client_allocs_cpu_total_percent{task='web'})"
+          # Monitor peak CPU usage over 1-minute window
+          # Scales when CPU allocation exceeds target threshold
+          query  = "max_over_time(nomad_client_allocs_cpu_total_percent{task='web'}[1m])"
 
           strategy "target-value" {
-            target = 30  # Scale when CPU > 30% just for testing ( to scaler quickly)
+            target = 50  # Scale when CPU exceeds 50% of 500 MHz allocation
           }
         }
       }
@@ -29,6 +31,32 @@ job "webapp" {
     network {
       port "http" {
         to = 80
+      }
+    }
+
+    service {
+      name     = "webapp"
+      port     = "http"
+      provider = "consul"
+      
+      tags = [
+        "load-balancer",
+        "http",
+        "web"
+      ]
+
+      check {
+        type        = "http"
+        path        = "/"
+        interval    = "10s"
+        timeout     = "2s"
+        method      = "GET"
+      }
+
+      check {
+        type     = "tcp"
+        interval = "10s"
+        timeout  = "2s"
       }
     }
 
@@ -41,8 +69,8 @@ job "webapp" {
       }
 
       resources {
-        cpu    = 100
-        memory = 128
+        cpu    = 500
+        memory = 256
       }
     }
   }

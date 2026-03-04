@@ -1,0 +1,23 @@
+datacenter = "dc1"
+data_dir = "/opt/consul/data"
+log_level = "INFO"
+node_name = "{{ ansible_hostname }}"
+
+bind_addr = "0.0.0.0"
+advertise_addr = "{{ ansible_default_ipv4.address }}"
+
+client_addr = "0.0.0.0"
+
+retry_join = ["server-vm-0.orb.local", "server-vm-1.orb.local", "server-vm-2.orb.local"]
+
+ports {
+  dns = 8600
+  http = 8500
+  https = -1
+  grpc = 8502
+  serf_lan = 8301
+}
+
+telemetry {
+  prometheus_retention_time = "30s"
+}

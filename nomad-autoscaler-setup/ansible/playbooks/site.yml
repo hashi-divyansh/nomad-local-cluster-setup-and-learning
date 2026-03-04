@@ -5,6 +5,18 @@
   roles:
     - base
 
+- name: Configure Consul servers
+  hosts: nomad_servers
+  become: true
+  roles:
+    - consul
+
+- name: Configure Consul clients
+  hosts: nomad_clients
+  become: true
+  roles:
+    - consul
+
 - name: Configure Nomad servers
   hosts: nomad_servers
   become: true

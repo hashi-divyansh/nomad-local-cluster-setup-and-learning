@@ -29,4 +29,4 @@ load-test:
 	hey $(HEY_FLAGS) "$(WEBAPP_URL)"
 
 destroy:
-	terraform destroy -auto-approve
+	terraform destroy -auto-approv

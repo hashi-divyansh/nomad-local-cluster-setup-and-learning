@@ -2,6 +2,12 @@ data_dir = "/opt/nomad/data"
 
 log_level = "INFO"
 
+telemetry {
+  publish_allocation_metrics = true
+  publish_node_metrics       = true
+  prometheus_metrics         = true
+}
+
 client {
   enabled = true
   servers = ["server-vm-0.orb.local:4647", "server-vm-1.orb.local:4647", "server-vm-2.orb.local:4647"]
@@ -13,8 +19,10 @@ client {
   }
 }
 
-telemetry {
-  publish_allocation_metrics = true
-  publish_node_metrics       = true
-  prometheus_metrics         = true
+consul {
+  address = "127.0.0.1:8500"
+  auth    = ""
+  auto_advertise = true
+  checks_use_advertise = true
 }
+

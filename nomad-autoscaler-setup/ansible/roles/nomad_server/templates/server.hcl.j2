@@ -2,6 +2,12 @@ data_dir = "/opt/nomad/data"
 
 log_level = "INFO"
 
+telemetry {
+  publish_allocation_metrics = true
+  publish_node_metrics       = true
+  prometheus_metrics         = true
+}
+
 server {
   enabled = true
   bootstrap_expect = 3
@@ -21,12 +27,11 @@ advertise {
   serf = "{{ '{{ GetPrivateIP }}' }}"
 }
 
-telemetry {
-  publish_allocation_metrics = true
-  publish_node_metrics       = true
-  prometheus_metrics         = true
+consul {
+  address = "127.0.0.1:8500"
+  auth    = ""
+  auto_advertise = true
+  server_auto_join = true
+  client_auto_join = true
 }
 
-ui {
-  enabled = true
-}

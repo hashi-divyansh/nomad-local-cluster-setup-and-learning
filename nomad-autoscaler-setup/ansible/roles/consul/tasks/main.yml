@@ -1,0 +1,117 @@
+---
+- name: Install Consul dependencies
+  ansible.builtin.apt:
+    name:
+      - wget
+      - unzip
+      - curl
+    state: present
+    update_cache: true
+
+- name: Ensure Consul directories exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+  loop:
+    - /etc/consul.d
+    - /opt/consul/data
+
+- name: Download Consul binary archive
+  ansible.builtin.get_url:
+    url: "{{ consul_zip_url }}"
+    dest: "{{ consul_zip_tmp_path }}"
+    mode: "0644"
+
+- name: Extract Consul binary
+  ansible.builtin.unarchive:
+    src: "{{ consul_zip_tmp_path }}"
+    dest: /usr/local/bin
+    remote_src: true
+    creates: /usr/local/bin/consul
+
+- name: Ensure Consul binary is executable
+  ansible.builtin.file:
+    path: /usr/local/bin/consul
+    mode: "0755"
+
+- name: Ensure consul user exists
+  ansible.builtin.user:
+    name: consul
+    system: true
+    create_home: false
+    shell: /usr/sbin/nologin
+
+- name: Set Consul directory ownership
+  ansible.builtin.file:
+    path: "{{ item }}"
+    owner: consul
+    group: consul
+    mode: "0755"
+  loop:
+    - /etc/consul.d
+    - /opt/consul/data
+
+- name: Deploy Consul server configuration
+  ansible.builtin.template:
+    src: server.hcl.j2
+    dest: /etc/consul.d/consul.hcl
+    owner: consul
+    group: consul
+    mode: "0644"
+  when: "'nomad_servers' in group_names"
+  notify: Restart consul
+
+- name: Deploy Consul client configuration
+  ansible.builtin.template:
+    src: client.hcl.j2
+    dest: /etc/consul.d/consul.hcl
+    owner: consul
+    group: consul
+    mode: "0644"
+  when: "'nomad_clients' in group_names"
+  notify: Restart consul
+
+- name: Validate Consul configuration
+  ansible.builtin.command: /usr/local/bin/consul validate /etc/consul.d
+  changed_when: false
+
+- name: Deploy Consul systemd unit
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/consul.service
+    mode: "0644"
+    content: |
+      [Unit]
+      Description=Consul service discovery
+      Documentation=https://www.consul.io/docs/
+      Requires=network-online.target
+      After=network-online.target
+      Wants=consul-online.target
+
+      [Service]
+      Type=simple
+      ExecStart=/usr/local/bin/consul agent -config-dir=/etc/consul.d
+      ExecReload=/bin/kill -HUP $MAINPID
+      KillMode=process
+      Restart=on-failure
+      TimeoutStopSec=5
+      User=consul
+      Group=consul
+
+      [Install]
+      WantedBy=multi-user.target
+  notify:
+    - Reload systemd
+    - Restart consul
+
+- name: Ensure Consul service is enabled and started
+  ansible.builtin.systemd:
+    name: consul
+    daemon_reload: true
+    enabled: true
+    state: started
+
+- name: Remove downloaded Consul archive
+  ansible.builtin.file:
+    path: "{{ consul_zip_tmp_path }}"
+    state: absent
