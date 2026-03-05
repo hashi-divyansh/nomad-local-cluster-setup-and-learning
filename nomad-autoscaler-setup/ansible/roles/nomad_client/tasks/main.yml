@@ -50,6 +50,17 @@
     groups: docker
     append: true
 
+- name: Pre-pull Docker images for applications
+  ansible.builtin.shell: |
+    docker pull nginx:alpine
+    docker pull telegraf:latest
+    docker pull influxdb:1.8
+  register: docker_pull_result
+  until: docker_pull_result is succeeded
+  retries: 3
+  delay: 10
+  become: true
+
 - name: Download Nomad binary archive
   ansible.builtin.get_url:
     url: "{{ nomad_zip_url }}"

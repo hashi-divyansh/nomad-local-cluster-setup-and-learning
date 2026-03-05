@@ -16,13 +16,12 @@ job "webapp" {
         evaluation_interval = "10s"
 
         check "cpu_usage" {
-          source = "prometheus"
-          # Monitor peak CPU usage over 1-minute window
-          # Scales when CPU allocation exceeds target threshold
-          query  = "max_over_time(nomad_client_allocs_cpu_total_percent{task='web'}[1m])"
+          source = "influxdb"
+          # Monitor peak CPU usage from Telegraf metrics
+          query  = "SELECT mean(\"usage_system\") + mean(\"usage_user\") FROM \"cpu\" WHERE \"cpu\" = 'cpu-total' AND time > now() - 1m GROUP BY time(10s)"
 
           strategy "target-value" {
-            target = 50  # Scale when CPU exceeds 50% of 500 MHz allocation
+            target = 30  # Scale when CPU exceeds 30% for faster scaling
           }
         }
       }

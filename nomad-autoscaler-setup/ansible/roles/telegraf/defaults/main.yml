@@ -1,10 +1,6 @@
 ---
-telegraf_version: 1.31.3
-telegraf_tar_url: "https://dl.influxdata.com/telegraf/releases/telegraf-{{ telegraf_version }}_static_linux_arm64.tar.gz"
-telegraf_tar_tmp_path: "/tmp/telegraf-{{ telegraf_version }}_static_linux_arm64.tar.gz"
-telegraf_extract_dir: "/tmp/telegraf-{{ telegraf_version }}_static_linux_arm64"
+telegraf_docker_image: "telegraf:latest"
 telegraf_config_dir: "/etc/telegraf"
-telegraf_log_dir: "/var/log/telegraf"
 telegraf_interval: "10s"
 telegraf_flush_interval: "10s"
 influxdb_endpoint: "http://influxdb-vm.orb.local:8086"

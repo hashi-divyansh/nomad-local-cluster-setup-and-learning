@@ -1,0 +1,6 @@
+---
+- name: Configure Nomad Autoscaler
+  hosts: nomad_servers
+  become: true
+  roles:
+    - nomad_autoscaler

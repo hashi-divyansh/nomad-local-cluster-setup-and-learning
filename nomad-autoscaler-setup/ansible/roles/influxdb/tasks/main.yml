@@ -1,10 +1,9 @@
 ---
-- name: Install InfluxDB dependencies
+- name: Install Docker
   ansible.builtin.apt:
     name:
-      - wget
-      - tar
-      - curl
+      - docker.io
+      - python3-docker
     state: present
     update_cache: true
 
@@ -21,82 +20,42 @@
       nameserver 1.1.1.1
       nameserver 8.8.8.8
 
-- name: Ensure InfluxDB group exists
-  ansible.builtin.group:
-    name: influxdb
-    system: true
-
-- name: Ensure InfluxDB user exists
-  ansible.builtin.user:
-    name: influxdb
-    group: influxdb
-    system: true
-    create_home: false
-    shell: /usr/sbin/nologin
-
-- name: Ensure InfluxDB directories exist
-  ansible.builtin.file:
-    path: "{{ item.path }}"
-    state: directory
-    owner: "{{ item.owner }}"
-    group: "{{ item.group }}"
-    mode: "0755"
-  loop:
-    - { path: "{{ influxdb_config_dir }}", owner: "influxdb", group: "influxdb" }
-    - { path: "{{ influxdb_data_dir }}", owner: "influxdb", group: "influxdb" }
-    - { path: "{{ influxdb_log_dir }}", owner: "influxdb", group: "influxdb" }
-
-- name: Download InfluxDB archive
-  ansible.builtin.get_url:
-    url: "{{ influxdb_tar_url }}"
-    dest: "{{ influxdb_tar_tmp_path }}"
-    mode: "0644"
-
-- name: Extract InfluxDB archive
-  ansible.builtin.unarchive:
-    src: "{{ influxdb_tar_tmp_path }}"
-    dest: /tmp
-    remote_src: true
-    creates: "{{ influxdb_extract_dir }}"
-
-- name: Install InfluxDB binary
-  ansible.builtin.copy:
-    src: "{{ influxdb_extract_dir }}/influxd"
-    dest: /usr/local/bin/influxd
-    remote_src: true
-    mode: "0755"
-
-- name: Install InfluxDB CLI binary
-  ansible.builtin.copy:
-    src: "{{ influxdb_extract_dir }}/influx"
-    dest: /usr/local/bin/influx
-    remote_src: true
-    mode: "0755"
-
-- name: Deploy InfluxDB configuration
-  ansible.builtin.template:
-    src: influxdb.conf.j2
-    dest: "{{ influxdb_config_dir }}/influxdb.conf"
-    owner: influxdb
-    group: influxdb
-    mode: "0644"
-  notify: Restart influxdb
-
-- name: Deploy InfluxDB systemd unit
-  ansible.builtin.template:
-    src: influxdb.service.j2
-    dest: /etc/systemd/system/influxdb.service
-    mode: "0644"
-  notify:
-    - Reload systemd
-    - Restart influxdb
-
-- name: Ensure InfluxDB service is enabled and started
+- name: Stop legacy InfluxDB systemd service if present
   ansible.builtin.systemd:
     name: influxdb
-    daemon_reload: true
-    enabled: true
+    state: stopped
+    enabled: false
+  ignore_errors: true
+
+- name: Ensure Docker service is started
+  ansible.builtin.systemd:
+    name: docker
     state: started
+    enabled: yes
+
+- name: Ensure InfluxDB data directory exists
+  ansible.builtin.file:
+    path: "{{ influxdb_data_dir }}"
+    state: directory
+    mode: "0755"
+
+- name: Pull InfluxDB Docker image
+  community.docker.docker_image:
+    name: "{{ influxdb_docker_image }}"
+    state: present
+    source: pull
+
+- name: Create InfluxDB container
+  community.docker.docker_container:
+    name: influxdb
+    image: "{{ influxdb_docker_image }}"
+    state: started
+    restart_policy: always
+    ports:
+      - "8086:8086"
+    volumes:
+      - "{{ influxdb_data_dir }}:/var/lib/influxdb"
+    memory: "512m"
 
 - name: Wait for InfluxDB to be ready
   ansible.builtin.wait_for:
@@ -107,29 +66,20 @@
 
 - name: Create InfluxDB database for Telegraf metrics
   ansible.builtin.shell: |
-    /usr/local/bin/influx -host localhost -port 8086 -execute "CREATE DATABASE telegraf"
-  ignore_errors: true
-  register: db_create_result
+    docker exec influxdb influx -execute "CREATE DATABASE telegraf" || true
+  ignore_errors: yes
 
 - name: Create InfluxDB database for Nomad autoscaler metrics
   ansible.builtin.shell: |
-    /usr/local/bin/influx -host localhost -port 8086 -execute "CREATE DATABASE nomad"
-  ignore_errors: true
+    docker exec influxdb influx -execute "CREATE DATABASE nomad" || true
+  ignore_errors: yes
 
-- name: Set retention policy for telegraf database
+- name: Create retention policy for telegraf database
   ansible.builtin.shell: |
-    /usr/local/bin/influx -host localhost -port 8086 -execute "CREATE RETENTION POLICY \"autogen\" ON \"telegraf\" DURATION {{ influxdb_retention }} REPLICATION 1 DEFAULT"
-  ignore_errors: true
+    docker exec influxdb influx -execute "CREATE RETENTION POLICY \"autogen\" ON \"telegraf\" DURATION 7d REPLICATION 1 DEFAULT" || true
+  ignore_errors: yes
 
-- name: Set retention policy for nomad database
+- name: Create retention policy for nomad database
   ansible.builtin.shell: |
-    /usr/local/bin/influx -host localhost -port 8086 -execute "CREATE RETENTION POLICY \"autogen\" ON \"nomad\" DURATION {{ influxdb_retention }} REPLICATION 1 DEFAULT"
-  ignore_errors: true
-
-- name: Remove temporary InfluxDB artifacts
-  ansible.builtin.file:
-    path: "{{ item }}"
-    state: absent
-  loop:
-    - "{{ influxdb_tar_tmp_path }}"
-    - "{{ influxdb_extract_dir }}"
+    docker exec influxdb influx -execute "CREATE RETENTION POLICY \"autogen\" ON \"nomad\" DURATION 7d REPLICATION 1 DEFAULT" || true
+  ignore_errors: yes

@@ -1,9 +1,4 @@
 ---
-influxdb_version: 1.8.10
-influxdb_tar_url: "https://dl.influxdata.com/influxdb/releases/influxdb-{{ influxdb_version }}-static_linux_arm64.tar.gz"
-influxdb_tar_tmp_path: "/tmp/influxdb-{{ influxdb_version }}-static_linux_arm64.tar.gz"
-influxdb_extract_dir: "/tmp/influxdb-{{ influxdb_version }}-static_linux_arm64"
+influxdb_docker_image: "influxdb:1.8"
 influxdb_data_dir: "/var/lib/influxdb"
-influxdb_config_dir: "/etc/influxdb"
-influxdb_log_dir: "/var/log/influxdb"
 influxdb_retention: "7d"  # 7 days retention for test data

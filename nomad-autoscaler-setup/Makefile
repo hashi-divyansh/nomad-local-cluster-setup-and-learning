@@ -1,6 +1,6 @@
 .PHONY: provision terraform-init terraform-apply inventory ansible load-test destroy
 
-HEY_FLAGS ?= -z 5m -c 100 -q 50
+HEY_FLAGS ?= -z 5m -c 200 -q 100
 
 provision: terraform-init terraform-apply inventory ansible
 

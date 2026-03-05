@@ -1,10 +1,9 @@
 ---
-- name: Install Telegraf dependencies
+- name: Install Docker
   ansible.builtin.apt:
     name:
-      - wget
-      - tar
-      - curl
+      - docker.io
+      - python3-docker
     state: present
     update_cache: true
 
@@ -21,87 +20,54 @@
       nameserver 1.1.1.1
       nameserver 8.8.8.8
 
-- name: Ensure Telegraf group exists
-  ansible.builtin.group:
+- name: Stop legacy Telegraf systemd service if present
+  ansible.builtin.systemd:
     name: telegraf
-    system: true
-
-- name: Ensure Telegraf user exists
-  ansible.builtin.user:
-    name: telegraf
-    group: telegraf
-    system: true
-    create_home: false
-    shell: /usr/sbin/nologin
-
-- name: Add telegraf user to docker group (for client nodes)
-  ansible.builtin.user:
-    name: telegraf
-    groups: docker
-    append: yes
-  when: inventory_hostname in groups['nomad_clients']
+    state: stopped
+    enabled: false
   ignore_errors: true
 
-- name: Ensure Telegraf directories exist
+- name: Ensure Docker service is started
+  ansible.builtin.systemd:
+    name: docker
+    state: started
+    enabled: yes
+
+- name: Ensure Telegraf config directory exists
   ansible.builtin.file:
-    path: "{{ item.path }}"
+    path: "{{ telegraf_config_dir }}"
     state: directory
-    owner: "{{ item.owner }}"
-    group: "{{ item.group }}"
-    mode: "0755"
-  loop:
-    - { path: "{{ telegraf_config_dir }}", owner: "telegraf", group: "telegraf" }
-    - { path: "{{ telegraf_log_dir }}", owner: "telegraf", group: "telegraf" }
-
-- name: Download Telegraf archive
-  ansible.builtin.get_url:
-    url: "{{ telegraf_tar_url }}"
-    dest: "{{ telegraf_tar_tmp_path }}"
-    mode: "0644"
-
-- name: Extract Telegraf archive
-  ansible.builtin.unarchive:
-    src: "{{ telegraf_tar_tmp_path }}"
-    dest: /tmp
-    remote_src: true
-    creates: "{{ telegraf_extract_dir }}"
-
-- name: Install Telegraf binary
-  ansible.builtin.copy:
-    src: "{{ telegraf_extract_dir }}/telegraf"
-    dest: /usr/local/bin/telegraf
-    remote_src: true
     mode: "0755"
 
 - name: Deploy Telegraf configuration
   ansible.builtin.template:
     src: telegraf.conf.j2
     dest: "{{ telegraf_config_dir }}/telegraf.conf"
-    owner: telegraf
-    group: telegraf
     mode: "0644"
-  notify: Restart telegraf
 
-- name: Deploy Telegraf systemd unit
-  ansible.builtin.template:
-    src: telegraf.service.j2
-    dest: /etc/systemd/system/telegraf.service
-    mode: "0644"
-  notify:
-    - Reload systemd
-    - Restart telegraf
+- name: Pull Telegraf Docker image
+  community.docker.docker_image:
+    name: "{{ telegraf_docker_image }}"
+    state: present
+    source: pull
 
-- name: Ensure Telegraf service is enabled and started
-  ansible.builtin.systemd:
-    name: telegraf
-    daemon_reload: true
-    enabled: true
+- name: Get hostname for container name
+  ansible.builtin.set_fact:
+    container_name: "telegraf-{{ inventory_hostname }}"
+
+- name: Create Telegraf container
+  community.docker.docker_container:
+    name: "{{ container_name }}"
+    image: "{{ telegraf_docker_image }}"
     state: started
-
-- name: Remove temporary Telegraf artifacts
-  ansible.builtin.file:
-    path: "{{ item }}"
-    state: absent
-  loop:
-    - "{{ telegraf_tar_tmp_path }}"
-    - "{{ telegraf_extract_dir }}"
+    restart_policy: always
+    volumes:
+      - "{{ telegraf_config_dir }}/telegraf.conf:/etc/telegraf/telegraf.conf:ro"
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - "/sys:/rootfs/sys:ro"
+      - "/proc:/rootfs/proc:ro"
+      - "/etc:/rootfs/etc:ro"
+    network_mode: host
+    memory: "256m"
+    capabilities:
+      - SYS_ADMIN

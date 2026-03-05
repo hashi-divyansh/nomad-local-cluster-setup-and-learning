@@ -64,11 +64,6 @@
     enabled: true
     state: started
 
-- name: Wait for nomad-autoscaler to be running
-  ansible.builtin.wait_for:
-    timeout: 10
-  delegate_to: localhost
-
 - name: Check nomad-autoscaler service status
   ansible.builtin.systemd:
     name: nomad-autoscaler

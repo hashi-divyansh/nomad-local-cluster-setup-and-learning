@@ -4,19 +4,3 @@ ansible_user: root
 consul_version: 1.17.0
 consul_zip_url: "https://releases.hashicorp.com/consul/1.17.0/consul_1.17.0_linux_arm64.zip"
 consul_zip_tmp_path: "/tmp/consul_1.17.0_linux_arm64.zip"
-
-
-prometheus_version: 2.50.1
-prometheus_archive_url: "https://github.com/prometheus/prometheus/releases/download/v2.50.1/prometheus-2.50.1.linux-arm64.tar.gz"
-prometheus_archive_tmp_path: "/tmp/prometheus-2.50.1.linux-arm64.tar.gz"
-prometheus_extract_dir: "/tmp/prometheus-2.50.1.linux-arm64"
-
-influxdb_version: 1.8.10
-influxdb_tar_url: "https://dl.influxdata.com/influxdb/releases/influxdb-{{ influxdb_version }}-static_linux_arm64.tar.gz"
-influxdb_tar_tmp_path: "/tmp/influxdb-{{ influxdb_version }}-static_linux_arm64.tar.gz"
-influxdb_extract_dir: "/tmp/influxdb-{{ influxdb_version }}-static_linux_arm64"
-
-telegraf_version: 1.31.3
-telegraf_tar_url: "https://dl.influxdata.com/telegraf/releases/telegraf-{{ telegraf_version }}_static_linux_arm64.tar.gz"
-telegraf_tar_tmp_path: "/tmp/telegraf-{{ telegraf_version }}_static_linux_arm64.tar.gz"
-telegraf_extract_dir: "/tmp/telegraf-{{ telegraf_version }}_static_linux_arm64"
