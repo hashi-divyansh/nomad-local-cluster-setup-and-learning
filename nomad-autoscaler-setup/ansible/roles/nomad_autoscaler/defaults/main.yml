@@ -6,3 +6,7 @@ nomad_autoscaler_log_dir: "/var/log/nomad-autoscaler"
 nomad_server_address: "http://127.0.0.1:4646"
 influxdb_apm_address: "http://influxdb-vm.orb.local:8086"
 influxdb_apm_database: "telegraf"
+
+# InfluxDB authentication (inherited from influxdb role)
+influxdb_autoscaler_user: "autoscaler"
+influxdb_autoscaler_password: "autoscaler_password"

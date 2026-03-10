@@ -7,8 +7,8 @@ Requires=nomad.service
 
 [Service]
 Type=simple
-User=nomad-autoscaler
-Group=nomad-autoscaler
+User=root
+Group=root
 ExecStart={{ nomad_autoscaler_install_path }} agent -config {{ nomad_autoscaler_config_dir }}/autoscaler.hcl
 StandardOutput=journal
 StandardError=journal

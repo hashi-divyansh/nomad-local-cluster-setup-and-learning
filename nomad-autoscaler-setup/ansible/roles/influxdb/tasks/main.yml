@@ -83,3 +83,45 @@
   ansible.builtin.shell: |
     docker exec influxdb influx -execute "CREATE RETENTION POLICY \"autogen\" ON \"nomad\" DURATION 7d REPLICATION 1 DEFAULT" || true
   ignore_errors: yes
+
+- name: Create InfluxDB admin user
+  ansible.builtin.shell: |
+    docker exec influxdb influx -execute "CREATE USER {{ influxdb_admin_user }} WITH PASSWORD '{{ influxdb_admin_password }}' WITH ALL PRIVILEGES" || true
+  ignore_errors: yes
+  when: influxdb_auth_enabled
+
+- name: Create InfluxDB telegraf user
+  ansible.builtin.shell: |
+    docker exec influxdb influx -execute "CREATE USER {{ influxdb_telegraf_user }} WITH PASSWORD '{{ influxdb_telegraf_password }}'" || true
+  ignore_errors: yes
+  when: influxdb_auth_enabled
+
+- name: Grant WRITE on telegraf database to telegraf user
+  ansible.builtin.shell: |
+    docker exec influxdb influx -execute "GRANT WRITE ON telegraf TO {{ influxdb_telegraf_user }}" || true
+  ignore_errors: yes
+  when: influxdb_auth_enabled
+
+- name: Grant READ on telegraf database to telegraf user
+  ansible.builtin.shell: |
+    docker exec influxdb influx -execute "GRANT READ ON telegraf TO {{ influxdb_telegraf_user }}" || true
+  ignore_errors: yes
+  when: influxdb_auth_enabled
+
+- name: Create InfluxDB autoscaler user
+  ansible.builtin.shell: |
+    docker exec influxdb influx -execute "CREATE USER {{ influxdb_autoscaler_user }} WITH PASSWORD '{{ influxdb_autoscaler_password }}'" || true
+  ignore_errors: yes
+  when: influxdb_auth_enabled
+
+- name: Grant READ on telegraf database to autoscaler user
+  ansible.builtin.shell: |
+    docker exec influxdb influx -execute "GRANT READ ON telegraf TO {{ influxdb_autoscaler_user }}" || true
+  ignore_errors: yes
+  when: influxdb_auth_enabled
+
+- name: Grant READ on nomad database to autoscaler user
+  ansible.builtin.shell: |
+    docker exec influxdb influx -execute "GRANT READ ON nomad TO {{ influxdb_autoscaler_user }}" || true
+  ignore_errors: yes
+  when: influxdb_auth_enabled

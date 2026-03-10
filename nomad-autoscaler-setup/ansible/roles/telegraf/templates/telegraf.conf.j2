@@ -26,6 +26,8 @@
   retention_policy = ""
   write_consistency = "any"
   timeout = "5s"
+  username = "{{ influxdb_telegraf_user }}"
+  password = "{{ influxdb_telegraf_password }}"
 
 [[inputs.cpu]]
   percpu = true
