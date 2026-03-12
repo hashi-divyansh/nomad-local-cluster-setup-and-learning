@@ -71,6 +71,41 @@
     enabled: true
     state: started
 
+- name: Wait for Nomad API to become ready
+  ansible.builtin.uri:
+    url: http://127.0.0.1:4646/v1/status/leader
+    method: GET
+    status_code: 200
+  register: nomad_leader_status
+  retries: 20
+  delay: 3
+  until: nomad_leader_status.status == 200 and (nomad_leader_status.content | default('')) != '""'
+  when:
+    - nomad_create_test_namespaces
+    - inventory_hostname == groups['nomad_servers'][0]
+
+- name: Write Nomad namespace definitions
+  ansible.builtin.copy:
+    dest: "/tmp/nomad-namespace-{{ item }}.hcl"
+    mode: "0644"
+    content: |
+      name = "{{ item }}"
+      description = "Autoscaler test namespace {{ item }}"
+  loop: "{{ nomad_test_namespaces }}"
+  when:
+    - nomad_create_test_namespaces
+    - inventory_hostname == groups['nomad_servers'][0]
+
+- name: Create or update Nomad namespaces
+  ansible.builtin.command: "nomad namespace apply /tmp/nomad-namespace-{{ item }}.hcl"
+  environment:
+    NOMAD_ADDR: "http://127.0.0.1:4646"
+  loop: "{{ nomad_test_namespaces }}"
+  changed_when: true
+  when:
+    - nomad_create_test_namespaces
+    - inventory_hostname == groups['nomad_servers'][0]
+
 - name: Remove downloaded Nomad archive
   ansible.builtin.file:
     path: "{{ nomad_zip_tmp_path }}"

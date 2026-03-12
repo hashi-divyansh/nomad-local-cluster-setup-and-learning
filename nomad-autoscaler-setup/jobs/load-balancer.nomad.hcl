@@ -7,8 +7,14 @@ job "load-balancer" {
     count = 1
 
     network {
-      port "http" {
+      port "default_http" {
         static = 8080
+      }
+      port "ns1_http" {
+        static = 8081
+      }
+      port "ns2_http" {
+        static = 8082
       }
       port "stats" {
         static = 1936
@@ -17,7 +23,7 @@ job "load-balancer" {
 
     service {
       name     = "load-balancer"
-      port     = "http"
+      port     = "default_http"
       provider = "consul"
 
       tags = [
@@ -31,7 +37,7 @@ job "load-balancer" {
 
       config {
         image = "haproxy:2.8-alpine"
-        ports = ["http", "stats"]
+        ports = ["default_http", "ns1_http", "ns2_http", "stats"]
         volumes = [
           "local/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg"
         ]
@@ -62,15 +68,39 @@ listen stats
   stats show-legends
   stats refresh 30s
 
-frontend http_in
+frontend default_http_in
   bind 0.0.0.0:8080
-  default_backend webapp_backend
+  default_backend webapp_default_backend
 
-backend webapp_backend
+frontend ns1_http_in
+  bind 0.0.0.0:8081
+  default_backend webapp_ns1_backend
+
+frontend ns2_http_in
+  bind 0.0.0.0:8082
+  default_backend webapp_ns2_backend
+
+backend webapp_default_backend
   balance roundrobin
   mode http
   option httpchk GET /
   {{ range service "webapp" }}
+  server {{ .ID }} {{ .Address }}:{{ .Port }} check
+  {{ end }}
+
+backend webapp_ns1_backend
+  balance roundrobin
+  mode http
+  option httpchk GET /
+  {{ range service "webapp-ns1" }}
+  server {{ .ID }} {{ .Address }}:{{ .Port }} check
+  {{ end }}
+
+backend webapp_ns2_backend
+  balance roundrobin
+  mode http
+  option httpchk GET /
+  {{ range service "webapp-ns2" }}
   server {{ .ID }} {{ .Address }}:{{ .Port }} check
   {{ end }}
 EOH

@@ -4,6 +4,9 @@ nomad_autoscaler_install_path: "/usr/local/bin/nomad-autoscaler"
 nomad_autoscaler_config_dir: "/etc/nomad-autoscaler"
 nomad_autoscaler_log_dir: "/var/log/nomad-autoscaler"
 nomad_server_address: "http://127.0.0.1:4646"
+nomad_autoscaler_namespaces:
+  - "ns1"
+  - "ns2"
 influxdb_apm_address: "http://influxdb-vm.orb.local:8086"
 influxdb_apm_database: "telegraf"
 

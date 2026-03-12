@@ -1,5 +1,6 @@
 nomad {
   address = "{{ nomad_server_address }}"
+  namespace = [{% for ns in nomad_autoscaler_namespaces %}"{{ ns }}"{% if not loop.last %}, {% endif %}{% endfor %}]
 }
 
 apm "influxdb" {
