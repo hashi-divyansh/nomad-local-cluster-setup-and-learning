@@ -1,363 +1,145 @@
-# Nomad Autoscaler Setup with OrbStack
+# Nomad Autoscaler Namespace Test Setup
 
-HashiCorp Nomad Autoscaler with InfluxDB/Telegraf monitoring. Provisions 3 Nomad servers, 3 client nodes, and InfluxDB VM using Terraform + Ansible + custom autoscaler binary.
+This repository provisions a Nomad cluster on OrbStack and configures a custom Nomad Autoscaler build for namespace-focused testing.
 
-## Architecture
+## What This Setup Includes
 
-**Infrastructure:**
-- **Nomad Cluster**: 3 servers + 3 clients with Consul service discovery
-- **InfluxDB 1.8**: Docker container for time-series metrics storage
-- **Telegraf**: Docker agent on all nodes collecting system and Docker metrics
-- **Autoscaler**: Custom Linux ARM64 binary running as systemd service on servers
-- **HAProxy**: Load balancer with dynamic Consul-based service discovery
+- 3 Nomad servers + 3 Nomad clients
+- Consul for service discovery
+- InfluxDB 1.8 as APM data source
+- Telegraf agents (Docker) on servers and clients
+- Nomad Autoscaler as a systemd service on servers
+- HAProxy Nomad job with separate ports per namespace test path
 
-**Scaling Policy:**
-- **Metric Source**: InfluxDB `telegraf` database (Telegraf CPU metrics)
-- **CPU Threshold**: 30% utilization (optimized for responsive scaling)
-- **Min/Max Count**: 1-10 instances
-- **Evaluation Interval**: 10 seconds
-- **Cooldown Period**: 30 seconds between scaling actions
+## Current Namespace Behavior
 
-**Data Flow:**
-```
-Telegraf (all nodes)
-    ↓
-InfluxDB (telegraf database)
-    ↓
-Nomad Autoscaler (queries every 10s)
-    ↓
-Scale up/down webapp instances
-    ↓
-HAProxy (auto-discovers via Consul)
-    ↓
-Distribute load across all healthy instances
-```
+Autoscaler config template:
+- `ansible/roles/nomad_autoscaler/templates/autoscaler.hcl.j2`
+
+Current setting:
+- `namespace = ["*"]`
+
+This means autoscaler tracks policies in all namespaces (`default`, `ns1`, `ns2`, etc.).
+
+If you want scoped tracking, change it to an explicit list, for example:
+- `namespace = ["ns1", "ns2"]`
+- `namespace = ["default", "ns1", "ns2"]`
 
 ## Quick Start
-
-**Prerequisites:** macOS with OrbStack, Terraform, Python 3, Ansible
-
-### 1. Provision Cluster
 
 ```bash
 cd nomad-autoscaler-setup
 make provision
 ```
 
-This command:
-- Runs `terraform init && terraform apply` to create VMs
-- Pre-pulls Docker images on all client nodes (nginx:alpine, telegraf:latest, influxdb:1.8)
-- Generates Ansible inventory from Terraform outputs
-- Deploys and starts all services (Nomad, Consul, InfluxDB, Telegraf, Autoscaler, HAProxy)
+`make provision` does:
+1. `terraform init`
+2. `terraform apply -auto-approve`
+3. inventory generation
+4. full Ansible playbook run
 
-**Estimated time:** 5-10 minutes
+## What Is Auto-Created
 
-### 2. Verify All Services
+Nomad namespaces are created during server role configuration:
+- `ns1`
+- `ns2`
 
-```bash
-# Verify Nomad cluster health
-NOMAD_ADDR=http://server-vm-0.orb.local:4646 nomad node status
+Source:
+- `ansible/roles/nomad_server/defaults/main.yml`
+- `ansible/roles/nomad_server/tasks/main.yml`
 
-# Verify autoscaler is running
-orb -m server-vm-0 sudo systemctl status nomad-autoscaler
+Jobs are not auto-submitted by Ansible in the current setup.
 
-# Verify Telegraf collecting metrics
-orb -m server-vm-0 docker ps --filter "name=telegraf"
+## Submit Test Jobs
 
-# Verify InfluxDB has metrics data
-orb -m influxdb-vm curl -s 'http://localhost:8086/query?db=telegraf' --data-urlencode 'q=SHOW MEASUREMENTS'
+Use Nomad UI (`http://server-vm-0.orb.local:4646/ui`) or CLI.
 
-# List jobs deployed
-NOMAD_ADDR=http://server-vm-0.orb.local:4646 nomad job status
-```
+Recommended test jobs:
+- `jobs/webapp-autoscale.nomad.hcl` (default namespace service: `webapp`)
+- `jobs/webapp-autoscale-ns1.nomad.hcl` (namespace `ns1`, service: `webapp-ns1`)
+- `jobs/webapp-autoscale-ns2.nomad.hcl` (namespace `ns2`, service: `webapp-ns2`)
 
-### 3. Access Web Consoles
+Load balancer job:
+- `jobs/load-balancer.nomad.hcl`
 
-| Service | URL | Purpose |
-|---------|-----|---------|
-| **Nomad UI** | http://server-vm-0.orb.local:4646/ui | Monitor jobs, allocations, nodes |
-| **Consul UI** | http://server-vm-0.orb.local:8500/ui | Service discovery, health checks |
-| **HAProxy Stats** | http://192.168.139.232:1936/stats | Load balancer status and metrics |
-| **InfluxDB** | http://influxdb-vm.orb.local:8086 | Query metrics (no web UI in v1.8) |
+## Load Balancer Ports
 
-## Testing Autoscaling
+HAProxy exposes separate frontends to keep namespace tests isolated:
 
-### Generate Load and Monitor
+- `:8080` -> backend `webapp` (default namespace)
+- `:8081` -> backend `webapp-ns1`
+- `:8082` -> backend `webapp-ns2`
+- `:1936` -> HAProxy stats
 
-**Terminal 1 - Watch Job Status:**
-```bash
-watch -n 2 'NOMAD_ADDR=http://server-vm-0.orb.local:4646 nomad job status webapp'
-```
+## Test Autoscaler by Namespace
 
-**Terminal 2 - Watch Autoscaler Decisions:**
-```bash
-orb -m server-vm-0 sudo journalctl -u nomad-autoscaler -f | grep -E "(scaling|from=|to=)"
-```
+### 1. Verify autoscaler runtime config
 
-**Terminal 3 - Generate Load:**
-```bash
-# First, find the load balancer IP
-NOMAD_ADDR=http://server-vm-0.orb.local:4646 nomad alloc status $(nomad job allocations load-balancer -json | jq -r '.[0].ID') | grep "Nomad Addr"
-
-# Then generate load (replace WEBAPP_URL with actual LB IP:port)
-make load-test WEBAPP_URL=http://192.168.139.232:8080 HEY_FLAGS='-z 5m -c 200 -q 100'
-```
-
-### Expected Scaling Behavior
-
-**Timeline (with 30% CPU threshold):**
-
-| Time | Event | Observation |
-|------|-------|-------------|
-| 0s | Load test starts | 200 concurrent clients, 100 req/s |
-| 0-30s | CPU builds up | Usage climbs past 30% threshold |
-| 30-40s | Autoscaler detects high CPU | Evaluation interval triggers, evaluates metrics |
-| 40-50s | **First scale-up triggered** | Nomad schedules additional webapp instance |
-| 50-60s | **Second scale-up triggered** | Another instance scheduled |
-| 60s+ | Continues scaling | Up to max 10 instances |
-| Load stops | CPU drops below 30% | No more scale-up actions |
-| +30s | **Cooldown expires** | Scale-down begins if still low |
-| +40s+ | **Scales down** | Reduces to 1-2 instances |
-
-**Monitor scaling in Nomad UI:**
-- Job: `webapp` → "Allocations" tab shows instance count changing
-- Each allocation shows CPU usage in real-time graphs
-
-### Verify Load Balancer is Routing
-
-```bash
-# Check all healthy webapp backends registered in Consul
-curl -s http://server-vm-0.orb.local:8500/v1/catalog/service/webapp | jq '.[] | {Node, ServiceAddress, ServicePort, ServiceID}'
-
-# Test direct routing through HAProxy
-curl -v http://192.168.139.232:8080/ | head -20
-
-# Check HAProxy stats (backend health, session counts, response codes)
-curl -s 'http://192.168.139.232:1936/stats' | grep -A 5 "webapp"
-```
-
-## Monitoring Metrics
-
-### Query InfluxDB
-
-**List all databases:**
-```bash
-curl -G 'http://influxdb-vm.orb.local:8086/query' --data-urlencode "q=SHOW DATABASES"
-```
-
-**Query Telegraf metrics (system data):**
-```bash
-# CPU metrics from all nodes
-curl -G 'http://influxdb-vm.orb.local:8086/query?db=telegraf' \
-  --data-urlencode 'q=SELECT mean("usage_user") + mean("usage_system") FROM "cpu" WHERE "cpu"="cpu-total" AND time > now() - 5m'
-
-# Memory metrics
-curl -G 'http://influxdb-vm.orb.local:8086/query?db=telegraf' \
-  --data-urlencode 'q=SELECT "used_percent" FROM "mem" WHERE time > now() - 5m'
-
-# Disk I/O metrics
-curl -G 'http://influxdb-vm.orb.local:8086/query?db=telegraf' \
-  --data-urlencode 'q=SELECT * FROM "diskio" LIMIT 10'
-```
-
-**Verify Telegraf is running on all nodes:**
-```bash
-for vm in server-vm-0 server-vm-1 server-vm-2 client-vm-0 client-vm-1 client-vm-2; do
-  echo "=== $vm ==="
-  orb -m $vm docker ps --filter "name=telegraf" --format "{{.Names}}: {{.Status}}"
-done
-```
-
-## Troubleshooting
-
-### Autoscaler Not Scaling
-
-**Check autoscaler is running:**
-```bash
-orb -m server-vm-0 sudo systemctl status nomad-autoscaler
-orb -m server-vm-0 sudo journalctl -u nomad-autoscaler -n 50 --no-pager
-```
-
-**Verify InfluxDB connectivity:**
-```bash
-orb -m server-vm-0 curl -I http://influxdb-vm.orb.local:8086/ping
-```
-
-**Check autoscaler configuration:**
 ```bash
 orb -m server-vm-0 sudo cat /etc/nomad-autoscaler/autoscaler.hcl
 ```
 
-**Verify autoscaler is querying telegraf database:**
+### 2. Watch autoscaler decisions
+
 ```bash
-# Look for "apm" in logs
-orb -m server-vm-0 sudo journalctl -u nomad-autoscaler | grep -i "apm\|influx\|telegraf" | tail -20
+orb -m server-vm-0 sudo journalctl -u nomad-autoscaler -f
 ```
 
-### Tasks Not Starting / Image Pull Timeouts
+Look for namespace info in policy target config, such as:
+- `Namespace:default`
+- `Namespace:ns1`
+- `Namespace:ns2`
 
-- Docker images are **pre-pulled** during provisioning to prevent timeouts
-- If allocations fail, check they're using pre-cached images:
+### 3. Generate namespace-specific load
 
 ```bash
-orb -m client-vm-0 docker images | grep -E "nginx|telegraf|influxdb"
+make load-test WEBAPP_URL=http://<lb-ip>:8080/
+make load-test WEBAPP_URL=http://<lb-ip>:8081/
+make load-test WEBAPP_URL=http://<lb-ip>:8082/
 ```
 
-### Load Balancer Not Routing Traffic
+### 4. Watch job scaling
 
 ```bash
-# Verify webapp is registered in Consul with correct health
-curl -s http://server-vm-0.orb.local:8500/v1/catalog/service/webapp | jq '.[] | {Node, ServiceAddress, ServicePort, Checks}'
-
-# Verify HAProxy backend is UP (not DOWN)
-curl -s 'http://192.168.139.232:1936/stats' | grep "webapp" | grep -v "^#"
-
-# Check HAProxy logs in allocation
-NOMAD_ADDR=http://server-vm-0.orb.local:4646 nomad alloc logs $(nomad job allocations load-balancer -json | jq -r '.[0].ID') haproxy
+NOMAD_ADDR=http://server-vm-0.orb.local:4646 nomad job status webapp
+NOMAD_ADDR=http://server-vm-0.orb.local:4646 nomad job status -namespace=ns1 webapp-ns1
+NOMAD_ADDR=http://server-vm-0.orb.local:4646 nomad job status -namespace=ns2 webapp-ns2
 ```
 
-### InfluxDB Not Collecting Metrics
+## Validate Cluster Health
 
 ```bash
-# Verify InfluxDB container is running
-orb -m influxdb-vm docker ps --filter "name=influxdb"
+# Clients ready
+NOMAD_ADDR=http://server-vm-0.orb.local:4646 nomad node status
 
-# Check InfluxDB logs
-orb -m influxdb-vm docker logs influxdb --tail 50
+# Job status
+NOMAD_ADDR=http://server-vm-0.orb.local:4646 nomad job status
 
-# Test connectivity from autoscaler
+# Autoscaler service
+orb -m server-vm-0 sudo systemctl status nomad-autoscaler --no-pager
+
+# InfluxDB reachable from server
 orb -m server-vm-0 curl -I http://influxdb-vm.orb.local:8086/ping
-
-# Verify telegraf database exists
-curl -G 'http://influxdb-vm.orb.local:8086/query' --data-urlencode "q=SHOW DATABASES"
 ```
 
-### Telegraf Not Writing Metrics to InfluxDB
+## Common Commands
 
 ```bash
-# Check Telegraf logs
-orb -m server-vm-0 docker logs telegraf-server-vm-0 --tail 50
+# Apply playbook changes only
+make ansible
 
-# Verify Telegraf connectivity to InfluxDB
-orb -m server-vm-0 docker exec telegraf-server-vm-0 \
-  curl -I http://influxdb-vm.orb.local:8086/ping
-```
+# Validate Nomad job files
+nomad job validate jobs/load-balancer.nomad.hcl
 
-## Configuration Files
-
-| Component | Location | Purpose |
-|-----------|----------|---------|
-| Nomad Server | `/etc/nomad.d/server.hcl` | Nomad server configuration |
-| Nomad Client | `/etc/nomad.d/client.hcl` | Nomad client + Docker driver |
-| Consul Server | `/etc/consul.d/server.json` | Consul server setup |
-| Autoscaler | `/etc/nomad-autoscaler/autoscaler.hcl` | Autoscaler InfluxDB connection + policies |
-| Telegraf | `/etc/telegraf/telegraf.conf` | Telegraf metrics collection config |
-| InfluxDB | Docker volume | Persisted metrics database |
-| HAProxy | `/etc/haproxy/haproxy.cfg` | Load balancer config (managed by Nomad) |
-
-## Development & Customization
-
-### Rebuild Autoscaler Binary
-
-```bash
-# Build for Linux ARM64 (required for OrbStack)
-cargo build --release --target aarch64-unknown-linux-gnu
-
-# Copy to bin/ and redeploy
-cp target/aarch64-unknown-linux-gnu/release/nomad-autoscaler bin/
-
-# Re-run ansible autoscaler role
-ANSIBLE_CONFIG=ansible/ansible.cfg ansible-playbook \
-  -i ansible/inventory/hosts.yml \
-  ansible/playbooks/site.yml \
-  --tags=nomad_autoscaler
-```
-
-### Adjust Scaling Policy
-
-Edit [jobs/webapp-autoscale.nomad.hcl](jobs/webapp-autoscale.nomad.hcl):
-
-```hcl
-policy {
-  cooldown            = "30s"          # Wait between scaling actions
-  evaluation_interval = "10s"          # How often to check metrics
-  
-  check "cpu_usage" {
-    target = 30                        # Change CPU threshold here
-  }
-}
-
-scaling {
-  min = 1
-  max = 10                             # Adjust max instances
-}
-```
-
-Then redeploy:
-```bash
-NOMAD_ADDR=http://server-vm-0.orb.local:4646 nomad job run jobs/webapp-autoscale.nomad.hcl
-```
-
-## Cleanup
-
-Destroy all infrastructure:
-
-```bash
-cd nomad-autoscaler-setup
+# Destroy everything
 make destroy
 ```
 
----
+## Notes
 
-## Project Structure
-
-```
-nomad-autoscaler-setup/
-├── main.tf                              # Terraform: 3 servers, 3 clients, influxdb-vm
-├── cloud-init-bootstrap.yaml.tmpl       # VM bootstrap (SSH + Python)
-├── Makefile                             # provision, destroy, load-test targets
-├── bin/
-│   └── nomad-autoscaler                 # Linux ARM64 binary with InfluxDB plugin
-├── ansible/
-│   ├── playbooks/
-│   │   ├── site.yml                     # Main playbook (all roles)
-│   │   └── autoscaler-only.yml          # Update autoscaler only
-│   ├── roles/
-│   │   ├── base/                        # DNS, hostname, /etc/hosts
-│   │   ├── consul/                      # Consul server/client agent
-│   │   ├── nomad_server/                # Nomad server + systemd
-│   │   ├── nomad_client/                # Nomad client + Docker agent + pre-pull images
-│   │   ├── influxdb/                    # InfluxDB 1.8 Docker container
-│   │   ├── telegraf/                    # Telegraf Docker agent
-│   │   └── nomad_autoscaler/            # Install autoscaler binary + systemd service
-│   ├── inventory/
-│   │   ├── generate_inventory.py        # Generate hosts.yml from Terraform
-│   │   └── hosts.yml                    # Ansible inventory (auto-generated)
-│   └── group_vars/
-│       └── all.yml                      # Global variables (VMs, IPs, credentials)
-├── jobs/
-│   ├── webapp-autoscale.nomad.hcl       # App with autoscaling policy (30% CPU threshold)
-│   ├── load-balancer.nomad.hcl          # HAProxy with Consul service discovery
-│   └── autoscaler.nomad.hcl             # (Deprecated - autoscaler runs as systemd now)
-├── CONSUL_SETUP.md                      # Detailed Consul configuration notes
-├── question.md                          # Problem statement and architecture analysis
-└── README.md                            # This file
-```
-
----
-
-## Key Enhancements Made
-
-✅ **Pre-pulled Docker Images**: No more pull timeouts during scaling  
-✅ **Optimized CPU Threshold**: Lowered from 50% to 30% for responsive scaling  
-✅ **Fixed Database Routing**: Autoscaler queries `telegraf` database (where Telegraf writes)  
-✅ **Systemd Autoscaler**: No Nomad job wrapper, direct systemd service  
-✅ **HAProxy Service Discovery**: Automatic backend registration via Consul  
-✅ **Comprehensive Monitoring**: InfluxDB metrics from all nodes, query examples included  
-
-## References
-
-- [Nomad Autoscaler Docs](https://www.nomadproject.io/docs/autoscaling)
-- [InfluxDB 1.8 Docs](https://docs.influxdata.com/influxdb/v1.8/)
-- [Telegraf Documentation](https://docs.influxdata.com/telegraf/)
-- [Consul Service Discovery](https://www.consul.io/docs/discovery)
+- A single LB URL does not guarantee isolated namespace tests; use the dedicated ports above.
+- If autoscaler namespace is not `[*]`, jobs outside configured namespaces will not scale.
+- Telegraf container status on clients can be checked with:
+  - `orb -m client-vm-0 sudo docker ps | grep telegraf`
+  - `orb -m client-vm-1 sudo docker ps | grep telegraf`
+  - `orb -m client-vm-2 sudo docker ps | grep telegraf`
