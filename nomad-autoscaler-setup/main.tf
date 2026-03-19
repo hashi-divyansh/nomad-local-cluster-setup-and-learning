@@ -43,9 +43,9 @@ resource "orbstack_machine" "server_vm" {
   })
 }
 
-# Create InfluxDB monitoring VM (for APM with Telegraf)
-resource "orbstack_machine" "influxdb_vm" {
-  name  = "influxdb-vm"
+# Create Prometheus monitoring VM (for autoscaler APM)
+resource "orbstack_machine" "prometheus_vm" {
+  name  = "prometheus-vm"
   image = "debian:bookworm"
 
   cloud_init = templatefile("${path.module}/cloud-init-bootstrap.yaml.tmpl", {
@@ -63,15 +63,15 @@ output "server_machines" {
   value = orbstack_machine.server_vm[*].name
 }
 
-# Output InfluxDB VM
-output "influxdb_machine" {
-  value = orbstack_machine.influxdb_vm.name
+# Output Prometheus VM
+output "prometheus_machine" {
+  value = orbstack_machine.prometheus_vm.name
 }
 
 # Output access URLs
-output "influxdb_url" {
-  value       = "http://influxdb-vm.orb.local:8086"
-  description = "InfluxDB API endpoint (after VM boots)"
+output "prometheus_url" {
+  value       = "http://prometheus-vm.orb.local:9090"
+  description = "Prometheus UI endpoint (after VM boots)"
 }
 
 output "nomad_ui_url" {
@@ -101,12 +101,12 @@ output "server_vm_connections" {
   description = "Server VM SSH connection details for Ansible inventory generation"
 }
 
-output "influxdb_vm_connection" {
+output "prometheus_vm_connection" {
   value = {
-    name     = orbstack_machine.influxdb_vm.name
-    ssh_host = orbstack_machine.influxdb_vm.ssh_host
-    ssh_port = orbstack_machine.influxdb_vm.ssh_port
+    name     = orbstack_machine.prometheus_vm.name
+    ssh_host = orbstack_machine.prometheus_vm.ssh_host
+    ssh_port = orbstack_machine.prometheus_vm.ssh_port
   }
-  description = "InfluxDB VM SSH connection details for Ansible inventory generation"
+  description = "Prometheus VM SSH connection details for Ansible inventory generation"
 }
 

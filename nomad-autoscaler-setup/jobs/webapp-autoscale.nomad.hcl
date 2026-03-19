@@ -16,9 +16,9 @@ job "webapp" {
         evaluation_interval = "10s"
 
         check "cpu_usage" {
-          source = "influxdb"
-          # Monitor peak CPU usage from Telegraf metrics
-          query  = "SELECT mean(\"usage_system\") + mean(\"usage_user\") FROM \"cpu\" WHERE \"cpu\" = 'cpu-total' AND time > now() - 1m GROUP BY time(10s)"
+          source = "prometheus"
+          # Monitor average Nomad client CPU utilization via Prometheus.
+          query  = "avg(nomad_client_host_cpu_total_percent{job=\"nomad-clients\"})"
 
           strategy "target-value" {
             target = 30  # Scale when CPU exceeds 30% for faster scaling

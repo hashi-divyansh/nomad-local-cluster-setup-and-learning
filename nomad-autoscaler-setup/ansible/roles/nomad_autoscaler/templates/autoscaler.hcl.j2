@@ -2,13 +2,10 @@ nomad {
   address = "{{ nomad_server_address }}"
 }
 
-apm "influxdb" {
-  driver = "influxdb"
+apm "prometheus" {
+  driver = "prometheus"
   config = {
-    address  = "{{ influxdb_apm_address }}"
-    database = "{{ influxdb_apm_database }}"
-    username = "{{ influxdb_autoscaler_user }}"
-    password = "{{ influxdb_autoscaler_password }}"
+    address = "{{ prometheus_apm_address }}"
   }
 }
 
