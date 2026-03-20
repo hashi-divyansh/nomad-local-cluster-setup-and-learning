@@ -23,7 +23,7 @@ load-test:
 	fi
 	@if [ -z "$(WEBAPP_URL)" ]; then \
 		echo "Set WEBAPP_URL to the webapp allocation URL"; \
-		echo "Example: make load-test WEBAPP_URL=http://192.168.139.135:28915"; \
+		echo "Example: make load-test WEBAPP_URL=http://192.168.139.200:8080/"; \
 		exit 1; \
 	fi
 	hey $(HEY_FLAGS) "$(WEBAPP_URL)"

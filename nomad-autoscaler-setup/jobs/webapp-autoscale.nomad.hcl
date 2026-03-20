@@ -15,13 +15,31 @@ job "webapp" {
         cooldown            = "30s"
         evaluation_interval = "10s"
 
-        check "cpu_usage" {
+        check "avg_cpu_up" {
           source = "prometheus"
-          # Monitor average Nomad client CPU utilization via Prometheus.
-          query  = "avg(nomad_client_host_cpu_total_percent{job=\"nomad-clients\"})"
+          query  = "avg(avg_over_time(nomad_client_allocs_cpu_total_percent{job=\"nomad-clients\", exported_job=\"webapp\"}[1m]))"
+          query_instant = true
+          group  = "avg_cpu"
 
-          strategy "target-value" {
-            target = 30  # Scale when CPU exceeds 30% for faster scaling
+          strategy "threshold" {
+            lower_bound           = 0.1
+            upper_bound           = 100
+            delta                 = 1
+            within_bounds_trigger = 1
+          }
+        }
+
+        check "avg_cpu_down" {
+          source = "prometheus"
+          query  = "avg(avg_over_time(nomad_client_allocs_cpu_total_percent{job=\"nomad-clients\", exported_job=\"webapp\"}[1m]))"
+          query_instant = true
+          group  = "avg_cpu"
+
+          strategy "threshold" {
+            lower_bound           = 0
+            upper_bound           = 0.05
+            delta                 = -1
+            within_bounds_trigger = 1
           }
         }
       }
