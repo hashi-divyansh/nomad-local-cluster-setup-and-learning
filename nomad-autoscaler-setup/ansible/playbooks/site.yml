@@ -29,11 +29,11 @@
   roles:
     - nomad_client
 
-- name: Configure Prometheus
-  hosts: prometheus
+- name: Configure Datadog agents
+  hosts: nomad_servers:nomad_clients
   become: true
   roles:
-    - prometheus
+    - datadog
 
 - name: Configure Nomad Autoscaler
   hosts: nomad_servers

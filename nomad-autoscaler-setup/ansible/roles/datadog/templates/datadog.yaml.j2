@@ -1,0 +1,14 @@
+api_key: "{{ datadog_api_key_effective }}"
+site: "{{ datadog_site }}"
+
+logs_enabled: false
+process_config:
+  process_collection:
+    enabled: false
+
+apm_config:
+  enabled: false
+
+tags:
+  - "env:local"
+  - "service:nomad"

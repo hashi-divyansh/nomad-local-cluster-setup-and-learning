@@ -1,0 +1,6 @@
+---
+# Copy this file to ansible/group_vars/all/vault.yml and encrypt it:
+# ansible-vault encrypt ansible/group_vars/all/vault.yml
+
+datadog_api_key: "replace-with-datadog-api-key"
+datadog_app_key: "replace-with-datadog-app-key"

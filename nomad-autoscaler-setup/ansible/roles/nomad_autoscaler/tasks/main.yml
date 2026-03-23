@@ -1,4 +1,19 @@
 ---
+- name: Resolve Datadog autoscaler keys from vars or environment
+  ansible.builtin.set_fact:
+    datadog_api_key_effective: "{{ datadog_api_key | default(lookup('env', 'DD_API_KEY'), true) | default(lookup('env', 'DATADOG_API_KEY'), true) }}"
+    datadog_app_key_effective: "{{ datadog_app_key | default(lookup('env', 'DD_APP_KEY'), true) | default(lookup('env', 'DATADOG_APP_KEY'), true) }}"
+  no_log: true
+
+- name: Validate Datadog autoscaler credentials are present
+  ansible.builtin.assert:
+    that:
+      - datadog_api_key_effective is defined
+      - datadog_api_key_effective | length > 0
+      - datadog_app_key_effective is defined
+      - datadog_app_key_effective | length > 0
+    fail_msg: "Datadog API/APP keys are required. Set datadog_api_key/datadog_app_key in Vault or export DD_API_KEY/DD_APP_KEY."
+
 - name: Ensure nomad-autoscaler group exists
   ansible.builtin.group:
     name: nomad-autoscaler

@@ -1,0 +1,68 @@
+---
+- name: Resolve Datadog API key from vars or environment
+  ansible.builtin.set_fact:
+    datadog_api_key_effective: "{{ datadog_api_key | default(lookup('env', 'DD_API_KEY'), true) | default(lookup('env', 'DATADOG_API_KEY'), true) }}"
+  no_log: true
+
+- name: Validate Datadog credentials are present
+  ansible.builtin.assert:
+    that:
+      - datadog_api_key_effective is defined
+      - datadog_api_key_effective | length > 0
+    fail_msg: "Datadog API key is required. Set datadog_api_key in Vault or export DD_API_KEY."
+
+- name: Ensure dependencies are installed
+  ansible.builtin.apt:
+    name:
+      - ca-certificates
+      - curl
+    state: present
+    update_cache: true
+
+- name: Download Datadog Agent install script
+  ansible.builtin.get_url:
+    url: https://install.datadoghq.com/scripts/install_script_agent7.sh
+    dest: /tmp/install_datadog_agent7.sh
+    mode: "0755"
+
+- name: Install Datadog Agent
+  ansible.builtin.command: bash /tmp/install_datadog_agent7.sh
+  args:
+    creates: /etc/datadog-agent/datadog.yaml
+  environment:
+    DD_API_KEY: "{{ datadog_api_key_effective }}"
+    DD_SITE: "{{ datadog_site }}"
+    DD_AGENT_MAJOR_VERSION: "{{ datadog_agent_major_version }}"
+    DD_INSTALL_ONLY: "true"
+
+- name: Ensure OpenMetrics integration directory exists
+  ansible.builtin.file:
+    path: /etc/datadog-agent/conf.d/openmetrics.d
+    state: directory
+    owner: dd-agent
+    group: dd-agent
+    mode: "0755"
+
+- name: Configure Datadog Agent core settings
+  ansible.builtin.template:
+    src: datadog.yaml.j2
+    dest: /etc/datadog-agent/datadog.yaml
+    owner: dd-agent
+    group: dd-agent
+    mode: "0640"
+  notify: Restart datadog-agent
+
+- name: Configure Nomad OpenMetrics integration
+  ansible.builtin.template:
+    src: openmetrics-conf.yaml.j2
+    dest: /etc/datadog-agent/conf.d/openmetrics.d/conf.yaml
+    owner: dd-agent
+    group: dd-agent
+    mode: "0640"
+  notify: Restart datadog-agent
+
+- name: Ensure datadog-agent service is enabled and started
+  ansible.builtin.systemd:
+    name: datadog-agent
+    enabled: true
+    state: started

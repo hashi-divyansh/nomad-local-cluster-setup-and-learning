@@ -1,0 +1,7 @@
+init_config:
+
+instances:
+  - openmetrics_endpoint: "{{ datadog_nomad_openmetrics_endpoint }}"
+    namespace: "{{ datadog_nomad_openmetrics_namespace }}"
+    metrics:
+      - "nomad_client_allocs_cpu_total_percent"

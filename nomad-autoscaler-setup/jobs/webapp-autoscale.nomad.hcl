@@ -16,8 +16,8 @@ job "webapp" {
         evaluation_interval = "10s"
 
         check "avg_cpu_up" {
-          source = "prometheus"
-          query  = "avg(avg_over_time(nomad_client_allocs_cpu_total_percent{job=\"nomad-clients\", exported_job=\"webapp\"}[1m]))"
+          source = "datadog"
+          query  = "avg:nomad.nomad_client_allocs_cpu_total_percent{job:nomad-clients,exported_job:webapp}.rollup(avg, 60)"
           query_instant = true
           group  = "avg_cpu"
 
@@ -30,8 +30,8 @@ job "webapp" {
         }
 
         check "avg_cpu_down" {
-          source = "prometheus"
-          query  = "avg(avg_over_time(nomad_client_allocs_cpu_total_percent{job=\"nomad-clients\", exported_job=\"webapp\"}[1m]))"
+          source = "datadog"
+          query  = "avg:nomad.nomad_client_allocs_cpu_total_percent{job:nomad-clients,exported_job:webapp}.rollup(avg, 60)"
           query_instant = true
           group  = "avg_cpu"
 

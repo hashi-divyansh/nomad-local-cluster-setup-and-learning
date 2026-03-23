@@ -1,6 +1,0 @@
----
-- name: Update Telegraf configuration
-  hosts: nomad_servers, nomad_clients
-  become: true
-  roles:
-    - telegraf

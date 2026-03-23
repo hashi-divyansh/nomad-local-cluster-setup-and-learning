@@ -2,10 +2,13 @@ nomad {
   address = "{{ nomad_server_address }}"
 }
 
-apm "prometheus" {
-  driver = "prometheus"
+apm "datadog" {
+  driver = "datadog"
   config = {
-    address = "{{ prometheus_apm_address }}"
+    dd_api_key = "{{ datadog_api_key_effective }}"
+    dd_app_key = "{{ datadog_app_key_effective }}"
+    dd_api_rate_per_second = "{{ datadog_api_rate_per_second }}"
+    site = "{{ datadog_site }}"
   }
 }
 
