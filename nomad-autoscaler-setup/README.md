@@ -39,8 +39,14 @@ If your Ansible config does not already provide a vault password source, run pla
 `make provision` now resolves Datadog credentials in this order:
 
 1. `ansible/group_vars/all/vault.yml` (if present)
-2. Environment variables `DD_API_KEY` and `DD_APP_KEY`
-3. Interactive prompt during `make ansible`
+2. Local file `.datadog.env` (created once via `make setup-datadog-creds`)
+3. Environment variables `DD_API_KEY` and `DD_APP_KEY`
+
+Set local credentials once so future `make provision` runs are non-interactive:
+
+```bash
+make setup-datadog-creds
+```
 
 You can also provide credentials via environment variables (fallback when Vault vars are not set):
 
