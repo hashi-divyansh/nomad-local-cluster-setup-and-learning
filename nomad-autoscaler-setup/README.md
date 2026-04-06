@@ -25,6 +25,8 @@ cd nomad-autoscaler-setup
 make provision
 ```
 
+The generated Ansible inventory uses OrbStack's SSH gateway by default on macOS, which connects through the local `orb` SSH host instead of dialing the VM private IPs directly. If you explicitly need direct SSH to the Terraform-reported addresses, regenerate the inventory with `ANSIBLE_USE_ORBSTACK_SSH=false`.
+
 ## Verify
 
 ```bash
@@ -51,6 +53,8 @@ curl -s http://prometheus-vm.orb.local:9090/api/v1/targets | jq '.data.activeTar
 ## Note
 
 Legacy InfluxDB/Telegraf roles still exist in the repo for reference, but the default deployment path now uses Prometheus.
+
+If Ansible reports `No route to host` against `192.168.x.x` VM addresses, the inventory was generated for direct SSH instead of OrbStack's SSH gateway. Re-run `make inventory` or `python3 ansible/inventory/generate_inventory.py` and verify the hosts point at `orb`.
 
 ## Cleanup
 

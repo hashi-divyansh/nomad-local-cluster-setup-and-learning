@@ -4,7 +4,7 @@ job "webapp" {
   type        = "service"
 
   group "web" {
-    count = 1  # Start with 1 tasks
+    count = 1
 
     scaling {
       enabled = true
@@ -12,35 +12,52 @@ job "webapp" {
       max     = 10
 
       policy {
+        evaluation_interval = "15s"
         cooldown            = "30s"
-        evaluation_interval = "10s"
 
-        check "avg_cpu_up" {
-          source = "prometheus"
-          query  = "avg(avg_over_time(nomad_client_allocs_cpu_total_percent{job=\"nomad-clients\", exported_job=\"webapp\"}[1m]))"
+        # Always-on CPU autoscaling outside schedule window.
+        check "cpu_up" {
+          source        = "prometheus"
+          query         = "100 * avg(avg_over_time(nomad_client_allocs_cpu_total_percent{exported_job='webapp',task='web'}[1m]))"
           query_instant = true
-          group  = "avg_cpu"
 
           strategy "threshold" {
-            lower_bound           = 0.1
-            upper_bound           = 100
+            upper_bound           = 70
             delta                 = 1
-            within_bounds_trigger = 1
+            within_bounds_trigger = "noop"
           }
         }
 
-        check "avg_cpu_down" {
-          source = "prometheus"
-          query  = "avg(avg_over_time(nomad_client_allocs_cpu_total_percent{job=\"nomad-clients\", exported_job=\"webapp\"}[1m]))"
+        check "cpu_down" {
+          source        = "prometheus"
+          query         = "100 * avg(avg_over_time(nomad_client_allocs_cpu_total_percent{exported_job='webapp',task='web'}[1m]))"
           query_instant = true
-          group  = "avg_cpu"
 
           strategy "threshold" {
-            lower_bound           = 0
-            upper_bound           = 0.05
+            lower_bound           = 20
             delta                 = -1
-            within_bounds_trigger = 1
+            within_bounds_trigger = "noop"
           }
+        }
+
+        # Active only during schedule window (UTC)
+        check "scheduled-fixed-scale" {
+          source = "prometheus"
+          query  = "vector(1)"
+
+          schedule {
+            start    = "37 10 * * *"
+            duration = "1m"
+          }
+
+          strategy "fixed-value" {
+            value = 2
+          }
+        }
+
+        target "nomad-target" {
+          job   = "webapp"
+          group = "web"
         }
       }
     }
@@ -55,7 +72,7 @@ job "webapp" {
       name     = "webapp"
       port     = "http"
       provider = "consul"
-      
+
       tags = [
         "load-balancer",
         "http",
@@ -63,11 +80,11 @@ job "webapp" {
       ]
 
       check {
-        type        = "http"
-        path        = "/"
-        interval    = "10s"
-        timeout     = "2s"
-        method      = "GET"
+        type     = "http"
+        path     = "/"
+        interval = "10s"
+        timeout  = "2s"
+        method   = "GET"
       }
 
       check {
