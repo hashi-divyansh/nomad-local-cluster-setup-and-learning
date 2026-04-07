@@ -2,11 +2,11 @@
 127.0.1.1 {{ inventory_hostname }}
 
 {% for host in groups['nomad_servers'] | default([]) %}
-{{ hostvars[host].ansible_host }} {{ host }} {{ host }}.orb.local
+{{ hostvars[host].node_ip | default(hostvars[host].ansible_host) }} {{ host }} {{ host }}.orb.local
 {% endfor %}
 {% for host in groups['nomad_clients'] | default([]) %}
-{{ hostvars[host].ansible_host }} {{ host }} {{ host }}.orb.local
+{{ hostvars[host].node_ip | default(hostvars[host].ansible_host) }} {{ host }} {{ host }}.orb.local
 {% endfor %}
 {% for host in groups['prometheus'] | default([]) %}
-{{ hostvars[host].ansible_host }} {{ host }} {{ host }}.orb.local
+{{ hostvars[host].node_ip | default(hostvars[host].ansible_host) }} {{ host }} {{ host }}.orb.local
 {% endfor %}
