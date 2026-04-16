@@ -14,6 +14,9 @@ inventory:
 	python3 ansible/inventory/generate_inventory.py
 
 ansible: inventory
+	@set -a; \
+	if [ -f .env ]; then . ./.env; fi; \
+	set +a; \
 	ANSIBLE_CONFIG=ansible/ansible.cfg ANSIBLE_ROLES_PATH=ansible/roles ansible-playbook -i ansible/inventory/hosts.yml ansible/playbooks/site.yml
 
 load-test:

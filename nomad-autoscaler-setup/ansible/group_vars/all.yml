@@ -1,6 +1,9 @@
 ---
 ansible_user: root
 
+nomad_license_path: "/etc/nomad.d/license.hclic"
+nomad_enterprise_license: "{{ lookup('ansible.builtin.env', 'NOMAD_ENTERPRISE_LICENSE') | default('', true) }}"
+
 consul_version: 1.17.0
 consul_zip_url: "https://releases.hashicorp.com/consul/1.17.0/consul_1.17.0_linux_arm64.zip"
 consul_zip_tmp_path: "/tmp/consul_1.17.0_linux_arm64.zip"

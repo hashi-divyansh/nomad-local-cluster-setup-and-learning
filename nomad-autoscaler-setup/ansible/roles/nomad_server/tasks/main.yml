@@ -48,6 +48,24 @@
     path: /usr/local/bin/nomad
     mode: "0755"
 
+- name: Validate Nomad Enterprise license is provided
+  ansible.builtin.assert:
+    that:
+      - (lookup('ansible.builtin.env', 'NOMAD_ENTERPRISE_LICENSE') | default('', true) | length) > 0
+    fail_msg: "NOMAD_ENTERPRISE_LICENSE is empty. Add it to your local .env before running make ansible."
+  when: "'+ent' in nomad_version"
+
+- name: Write Nomad Enterprise license file
+  ansible.builtin.copy:
+    dest: "{{ nomad_license_path }}"
+    content: "{{ lookup('ansible.builtin.env', 'NOMAD_ENTERPRISE_LICENSE') }}\n"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+  when: "'+ent' in nomad_version"
+  notify: Restart nomad
+
 - name: Deploy Nomad server configuration
   ansible.builtin.template:
     src: server.hcl.j2
