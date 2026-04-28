@@ -1,17 +1,17 @@
----
+# Minimal, readable Ansible site playbook for Nomad + Consul + Prometheus
 - name: Configure base host resolution
   hosts: all
   become: true
   roles:
     - base
 
-- name: Configure Consul servers
+- name: Configure Consul (servers)
   hosts: nomad_servers
   become: true
   roles:
     - consul
 
-- name: Configure Consul clients
+- name: Configure Consul (clients)
   hosts: nomad_clients
   become: true
   roles:
@@ -34,9 +34,3 @@
   become: true
   roles:
     - prometheus
-
-- name: Configure Nomad Autoscaler
-  hosts: nomad_servers
-  become: true
-  roles:
-    - nomad_autoscaler

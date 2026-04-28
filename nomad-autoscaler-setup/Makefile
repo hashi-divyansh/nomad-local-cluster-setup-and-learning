@@ -1,4 +1,4 @@
-.PHONY: provision terraform-init terraform-apply inventory ansible load-test destroy
+.PHONY: provision terraform-init terraform-apply inventory ansible serve-binary autoscaler-job load-test destroy
 
 HEY_FLAGS ?= -z 5m -c 200 -q 100
 
@@ -30,6 +30,13 @@ load-test:
 		exit 1; \
 	fi
 	hey $(HEY_FLAGS) "$(WEBAPP_URL)"
+
+serve-binary:
+	@echo "Serving bin/ at http://host.orb.internal:8888 — press Ctrl+C to stop"
+	python3 -m http.server 8888
+
+autoscaler-job:
+	NOMAD_ADDR=http://server-vm-0.orb.local:4646 nomad job run jobs/autoscaler.nomad.hcl
 
 destroy:
 	terraform destroy -auto-approv
