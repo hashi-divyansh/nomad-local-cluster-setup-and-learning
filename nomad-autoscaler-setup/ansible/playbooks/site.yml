@@ -36,7 +36,7 @@
     - prometheus
 
 - name: Configure Nomad Autoscaler
-  hosts: nomad_servers
+  hosts: nomad_servers[0]
   become: true
   roles:
     - nomad_autoscaler

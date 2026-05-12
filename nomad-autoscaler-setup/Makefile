@@ -59,4 +59,4 @@ load-test:
 	fi
 
 destroy:
-	terraform destroy -auto-approv
+	terraform destroy -auto-approve
